@@ -1,115 +1,203 @@
-# Drug Monograph RAG (Ibuprofen) — Mistral API Edition
+---
+title: Medical Drug Information RAG
+emoji: 💊
+colorFrom: purple
+colorTo: blue
+sdk: gradio
+sdk_version: "4.43.0"
+app_file: app.py
+pinned: false
+license: apache-2.0
+---
 
-This repository hosts a production-ready retrieval-augmented generation (RAG) stack for answering ibuprofen monograph questions. Retrieval runs over `data/chunks.jsonl`; generation uses an open-source Mistral model exposed via HTTP (OpenAI-compatible or Ollama). A CPU fallback (`google/flan-t5-base`) keeps the app functional when no remote LLM is available. The project ships with a Gradio UI suitable for local development and deployment to a Hugging Face Space.
+# 💊 Medical Drug Information RAG Assistant
 
-## Fill These Before Running
+An intelligent medical information retrieval system that answers questions about medications using Retrieval-Augmented Generation (RAG). The system searches through drug monographs and provides evidence-based answers with proper citations.
 
-Search for the markers `# === FILL_ME` and update the following:
+**Try the Chatbot by following the link: https://huggingface.co/spaces/llSTRIKERll/RAG_based_QA_system**
 
-1. `.env` (copy from `.env.example`):
-   - `LLM_PROVIDER`
-   - `LLM_BASE_URL`
-   - `LLM_API_KEY`
-   - `LLM_API_KEY_HEADER`
-   - `MISTRAL_MODEL`
-2. `config.py`: verify the defaults for `LLM_BASE_URL`, `LLM_API_KEY`, and `MISTRAL_MODEL`.
-3. Any additional files with `# === FILL_ME` comments (search the repo to confirm nothing was missed).
+## 🌟 Features
 
-Without valid values the app will fall back to the local FLAN-T5 model and warn you at startup.
+- **Hybrid Retrieval**: Combines semantic search (FAISS) with lexical search (BM25) for optimal accuracy
+- **Multi-drug Support**: Query information across different medications
+- **Route-specific Information**: Filter by administration route (oral, IV, ophthalmic, etc.)
+- **Source Citations**: Every answer includes references to source documents
+- **Smart Filtering**: Drug and route filters with graduated scoring
+- **Interactive UI**: Modern interface with example queries and tabbed results
 
-## Quick Start (Local)
+## 🔧 Technology Stack
+
+- **Retrieval**: FAISS (semantic) + BM25 (lexical)
+- **Embeddings**: sentence-transformers/all-MiniLM-L6-v2
+- **LLM**: Groq (llama-3.1-8b-instant) with FLAN-T5 fallback
+- **Framework**: Gradio 4.43.0
+- **Backend**: FastAPI + Uvicorn
+
+## 📊 How It Works
+
+1. **User Query**: Enter a medical question (e.g., "What are the side effects of azithromycin?")
+2. **Hybrid Search**: System retrieves relevant passages using semantic + keyword matching
+3. **Context Building**: Top passages are formatted with metadata (drug, route, section)
+4. **Answer Generation**: LLM generates a concise, cited answer from the retrieved context
+5. **Source Display**: Original sources are provided with links for verification
+
+## 🎯 Example Queries
+
+- "What are the side effects of azithromycin?"
+- "What is the correct dosage for oral azithromycin in adults?"
+- "Can azithromycin be used during pregnancy?"
+- "What drugs interact with azithromycin?"
+- "What are the differences between oral and IV azithromycin?"
+
+## ⚙️ Configuration
+
+The system uses environment variables for configuration (`.env` file):
 
 ```bash
+# LLM Configuration
+LLM_PROVIDER=openai_compat
+LLM_BASE_URL=https://api.groq.com/openai
+LLM_API_KEY=your_groq_api_key
+MISTRAL_MODEL=llama-3.1-8b-instant
+
+# Retrieval Settings
+RETRIEVAL_BM25_ALPHA=0.4  # 40% semantic + 60% BM25
+RETRIEVAL_TOPK=5
+TIMEOUT_SECONDS=60
+```
+
+## 📁 Project Structure
+
+```
+.
+├── app.py                  # Gradio UI
+├── rag.py                  # RAG orchestration
+├── retriever.py            # Hybrid retrieval (FAISS + BM25)
+├── generator.py            # LLM adapter layer
+├── index_builder.py        # FAISS index builder
+├── data_ingest.py          # Data loading and normalization
+├── prompt_templates.py     # System and user prompts
+├── config.py              # Configuration management
+├── utils.py               # Helper utilities
+├── data/
+│   └── chunks.jsonl       # Drug monograph chunks
+└── artefacts/
+    ├── index.faiss        # FAISS vector index
+    └── records.pkl        # Metadata records
+```
+
+## 🚀 Local Setup
+
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd medical-rag
+
+# Create virtual environment
 python -m venv .venv
-. .venv/Scripts/activate  # on Windows; use `. .venv/bin/activate` on Unix
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 
-# Optional: copy environment template
-cp .env.example .env  # edit placeholders afterwards
+# Configure environment
+cp .env.example .env
+# Edit .env with your API key
 
-# Build the FAISS index (first run may take several minutes)
+# Build the index (first time only)
 python index_builder.py --rebuild
 
-# Launch the Gradio app
+# Run the application
 python app.py
 ```
 
-Open the provided local URL to query the assistant. If the banner reports “Using local FLAN-T5 fallback (CPU)”, update your `.env` and restart once a remote Mistral endpoint is ready.
+Visit `http://127.0.0.1:7861` to use the application.
 
-## Configure the Mistral Backend
+## 📦 Dependencies
 
-The generator supports two primary adapters plus the local fallback:
-
-1. **OpenAI-compatible gateway** (e.g., vLLM, TGI, OpenRouter, HF Inference Endpoint)
-   - `.env`:
-     ```env
-     LLM_PROVIDER=openai_compat
-     LLM_BASE_URL=https://YOUR-LLM-ENDPOINT  # === FILL_ME
-     LLM_API_KEY=YOUR-API-KEY               # === FILL_ME (leave blank if not needed)
-     LLM_API_KEY_HEADER=Authorization       # Adjust if your endpoint expects a different header
-     MISTRAL_MODEL=mistral-7b-instruct      # === FILL_ME (model id exposed by your gateway)
-     ```
-   - The app will call `${LLM_BASE_URL}/v1/chat/completions` with standard OpenAI payloads.
-
-2. **Ollama** (local inference)
-   - `.env`:
-     ```env
-     LLM_PROVIDER=ollama
-     LLM_BASE_URL=http://localhost:11434   # === FILL_ME if different
-     MISTRAL_MODEL=mistral                 # === FILL_ME
-     ```
-   - Ensure `ollama serve` is running with the desired Mistral model pulled.
-
-3. **Fallback** — if the selected backend fails or remains unconfigured, the router automatically switches to `google/flan-t5-base` on CPU.
-
-## Retrieval & Indexing
-
-- Source knowledge base: `data/chunks.jsonl` (not committed; copy your generated file into this path).
-- The index builder writes artefacts under `artefacts/` (`index.faiss`, `records.pkl`). Keep this directory ignored by git.
-- Rebuild command (customized paths supported):
-  ```bash
-  python index_builder.py --rebuild --chunks-path data/chunks.jsonl \
-      --index-path artefacts/index.faiss \
-      --records-path artefacts/records.pkl
-  ```
-
-## Running Tests
-
-The repository includes lightweight smoke tests that stub heavy components:
-
-```bash
-pytest -q
+```
+gradio==4.43.0
+sentence-transformers>=2.2.0
+faiss-cpu>=1.7.0
+rank-bm25>=0.2.2
+httpx>=0.24.0
+numpy>=1.24.0
+python-dotenv>=1.0.0
+fastapi>=0.104.0
+uvicorn>=0.24.0
+transformers>=4.35.0  # For FLAN-T5 fallback
 ```
 
-## Deploying to a Hugging Face Space
+## ⚠️ Important Disclaimers
 
-1. Create a new Space (Gradio SDK) and push the repo contents, including `huggingface.yaml`.
-2. In the Space Settings → Variables and secrets, add:
-   - `LLM_PROVIDER`
-   - `LLM_BASE_URL`
-   - `LLM_API_KEY` (as a **secret**)
-   - `LLM_API_KEY_HEADER`
-   - `MISTRAL_MODEL`
-3. Upload your `data/chunks.jsonl` and (optionally) pre-built `artefacts/` folder, or allow the Space to build the index on first launch.
-4. Deploy. A banner will indicate if the app is using the FLAN fallback.
+- **Not Medical Advice**: This tool provides information from drug monographs for educational purposes only
+- **Consult Professionals**: Always consult licensed healthcare professionals for medical advice
+- **Accuracy**: While the system aims for accuracy, always verify critical information with official sources
+- **Limitations**: The system only knows about drugs in its training data (see `data/chunks.jsonl`)
 
-## Repository Layout
+## 🎓 Use Cases
 
-- `app.py` – Gradio interface and deployment entrypoint.
-- `config.py` – Central configuration with environment fallbacks.
-- `data_ingest.py` – JSONL loader and normalizer.
-- `index_builder.py` – FAISS index builder/loader.
-- `retriever.py` – Hybrid semantic/BM25 retriever with route filters.
-- `generator.py` – Mistral HTTP adapters and local FLAN fallback.
-- `rag.py` – Retrieval-generation orchestration and safety guardrails.
-- `prompt_templates.py` – System and user prompt templates.
-- `tests/` – Smoke tests covering ingestion, indexing, and pipeline wiring.
+- **Medical Students**: Quick reference for drug information
+- **Healthcare Educators**: Teaching tool for pharmacology
+- **Researchers**: Exploring drug interactions and contraindications
+- **General Public**: Learning about prescribed medications
 
-## Troubleshooting
+## 🔬 Model Performance
 
-- **Slow startup**: The first launch downloads the embedding and FLAN models. Subsequent runs use cached weights.
-- **Placeholder warnings**: Update `.env` and re-run; the banner disappears once a valid endpoint is configured.
-- **Empty answers**: Ensure `data/chunks.jsonl` contains the expected ibuprofen sections and rebuild the index.
+- **Retrieval Accuracy**: Hybrid approach (40% semantic + 60% BM25) optimized for medical terminology
+- **Response Time**: ~2-5 seconds per query (depends on LLM provider)
+- **Citation Quality**: All answers include source references
+- **Fallback Mode**: Uses local FLAN-T5 if primary LLM unavailable
 
-Always review generated answers with a qualified clinician before acting on them.
+## 🛠️ Advanced Features
+
+### Debug Mode
+Enable "Show retrieval debug info" to see:
+- Retrieval scores for each passage
+- Drug and section metadata
+- Text previews of matched chunks
+
+### Filters
+- **Drug Filter**: Focus on specific medications
+- **Route Filter**: Get route-specific information (oral, IV, etc.)
+- **Top-K**: Adjust number of retrieved passages (3-10)
+- **Temperature**: Control response randomness (0.0-1.0)
+
+## 📝 Data Sources
+
+Drug information is sourced from:
+- Mayo Clinic drug monographs
+- FDA-approved prescribing information
+- Peer-reviewed pharmaceutical databases
+
+All sources are cited in responses with clickable links.
+
+## 🤝 Contributing
+
+This is an educational project. For improvements:
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request with clear description
+
+## 📄 License
+
+Apache 2.0 License - See LICENSE file for details
+
+## 🙏 Acknowledgments
+
+- Drug monograph data providers (Mayo Clinic, FDA)
+- Hugging Face for Sentence Transformers
+- Anthropic for guidance on RAG systems
+- Groq for fast LLM inference
+
+## 📧 Contact
+
+For questions or issues, please open a GitHub issue or contact the maintainers.
+
+---
+
+**Built with ❤️ for better medical information access**
+
+
+
 
