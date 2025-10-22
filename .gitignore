@@ -1,0 +1,40 @@
+# Byte-compiled / cached
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Hugging Face cache
+~/.cache/
+hf_cache/
+
+# Logs
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
+
+# unused
+diagnose_retrieval.py
+chunk_drug_json.ipynb
+
+#huggingface_space_dependencies
+huggingface.yaml
+
+#workspace environment
+.env
+
+
+# Ignore large local dataset
+/data/chunks.jsonl
+
+# Ignore generated artefacts
+artefacts/*
+!artefacts/.gitkeep
